@@ -1,0 +1,73 @@
+2026-03-02 06:39:24,794 DEBUG    root            Loaded Command Group: ['gcloud', 'projects']
+2026-03-02 06:39:24,799 DEBUG    root            Loaded Command Group: ['gcloud', 'projects', 'describe']
+2026-03-02 06:39:24,801 DEBUG    root            Running [gcloud.projects.describe] with arguments: [--format: "value(projectNumber)", PROJECT_ID_OR_NUMBER: "ece-247a-final-project-488803"]
+2026-03-02 06:39:24,839 DEBUG    urllib3.connectionpool Starting new HTTPS connection (1): cloudresourcemanager.googleapis.com:443
+2026-03-02 06:39:24,879 DEBUG    urllib3.connectionpool https://cloudresourcemanager.googleapis.com:443 "GET /v1/projects/ece-247a-final-project-488803?alt=json HTTP/11" 403 None
+2026-03-02 06:39:24,883 DEBUG    root            Chosen display Format:default
+2026-03-02 06:39:24,898 DEBUG    root            Chosen display Format:default
+2026-03-02 06:39:24,900 DEBUG    root            Chosen display Format:default
+2026-03-02 06:39:24,901 DEBUG    root            (gcloud.projects.describe) [274970617467-compute@developer.gserviceaccount.com] does not have permission to access projects instance [ece-247a-final-project-488803] (or it may not exist): Request had insufficient authentication scopes. This command is authenticated as 274970617467-compute@developer.gserviceaccount.com which is the active account specified by the [core/account] property.
+- '@type': type.googleapis.com/google.rpc.ErrorInfo
+  domain: googleapis.com
+  metadata:
+    method: google.cloudresourcemanager.v1.Projects.GetProject
+    service: cloudresourcemanager.googleapis.com
+  reason: ACCESS_TOKEN_SCOPE_INSUFFICIENT
+
+If you are in a compute engine VM, it is likely that the specified scopes during VM creation are not enough to run this command.
+See https://cloud.google.com/compute/docs/access/service-accounts#accesscopesiam for more information about access scopes.
+See https://cloud.google.com/compute/docs/access/create-enable-service-accounts-for-instances#changeserviceaccountandscopes for how to update access scopes of the VM.
+Traceback (most recent call last):
+  File "/usr/bin/../lib/google-cloud-sdk/lib/googlecloudsdk/calliope/cli.py", line 981, in Execute
+    resources = calliope_command.Run(cli=self, args=args)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/bin/../lib/google-cloud-sdk/lib/googlecloudsdk/calliope/backend.py", line 934, in Run
+    resources = command_instance.Run(args)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/bin/../lib/google-cloud-sdk/lib/surface/projects/describe.py", line 51, in Run
+    return projects_api.Get(project_ref)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/bin/../lib/google-cloud-sdk/lib/googlecloudsdk/api_lib/cloudresourcemanager/projects_api.py", line 129, in Get
+    return client.projects.Get(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/usr/bin/../lib/google-cloud-sdk/lib/googlecloudsdk/generated_clients/apis/cloudresourcemanager/v1/cloudresourcemanager_v1_client.py", line 758, in Get
+    return self._RunMethod(
+           ^^^^^^^^^^^^^^^^
+  File "/usr/bin/../lib/google-cloud-sdk/lib/third_party/apitools/base/py/base_api.py", line 747, in _RunMethod
+    return self.ProcessHttpResponse(method_config, http_response, request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/bin/../lib/google-cloud-sdk/lib/third_party/apitools/base/py/base_api.py", line 753, in ProcessHttpResponse
+    self.__ProcessHttpResponse(method_config, http_response, request))
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/bin/../lib/google-cloud-sdk/lib/third_party/apitools/base/py/base_api.py", line 612, in __ProcessHttpResponse
+    raise exceptions.HttpError.FromResponse(
+apitools.base.py.exceptions.HttpForbiddenError: HttpError accessing <https://cloudresourcemanager.googleapis.com/v1/projects/ece-247a-final-project-488803?alt=json>: response: <{'www-authenticate': 'Bearer realm="https://accounts.google.com/", error="insufficient_scope", scope="https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/cloud-platform.read-only https://www.googleapis.com/auth/cloudplatformprojects https://www.googleapis.com/auth/cloudplatformprojects.readonly"', 'vary': 'Origin, X-Origin, Referer', 'content-type': 'application/json; charset=UTF-8', 'content-encoding': 'gzip', 'date': 'Mon, 02 Mar 2026 06:39:24 GMT', 'server': 'ESF', 'x-xss-protection': '0', 'x-frame-options': 'SAMEORIGIN', 'x-content-type-options': 'nosniff', 'server-timing': 'gfet4t7; dur=31', 'transfer-encoding': 'chunked', 'status': 403}>, content <{
+  "error": {
+    "code": 403,
+    "message": "Request had insufficient authentication scopes.",
+    "status": "PERMISSION_DENIED",
+    "details": [
+      {
+        "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+        "reason": "ACCESS_TOKEN_SCOPE_INSUFFICIENT",
+        "domain": "googleapis.com",
+        "metadata": {
+          "method": "google.cloudresourcemanager.v1.Projects.GetProject",
+          "service": "cloudresourcemanager.googleapis.com"
+        }
+      }
+    ]
+  }
+}
+>
+2026-03-02 06:39:24,911 ERROR    root            (gcloud.projects.describe) [274970617467-compute@developer.gserviceaccount.com] does not have permission to access projects instance [ece-247a-final-project-488803] (or it may not exist): Request had insufficient authentication scopes. This command is authenticated as 274970617467-compute@developer.gserviceaccount.com which is the active account specified by the [core/account] property.
+- '@type': type.googleapis.com/google.rpc.ErrorInfo
+  domain: googleapis.com
+  metadata:
+    method: google.cloudresourcemanager.v1.Projects.GetProject
+    service: cloudresourcemanager.googleapis.com
+  reason: ACCESS_TOKEN_SCOPE_INSUFFICIENT
+
+If you are in a compute engine VM, it is likely that the specified scopes during VM creation are not enough to run this command.
+See https://cloud.google.com/compute/docs/access/service-accounts#accesscopesiam for more information about access scopes.
+See https://cloud.google.com/compute/docs/access/create-enable-service-accounts-for-instances#changeserviceaccountandscopes for how to update access scopes of the VM.
