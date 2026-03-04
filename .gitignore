@@ -50,6 +50,7 @@ lightning_logs/
 data
 bids_data
 *.tar.gz
+Data
 
 # LM
 wikitext-103-raw*
