@@ -1,0 +1,5 @@
+- user=single_user
+- checkpoint='/content/drive/MyDrive/emg2qwerty/logs/2026-03-05/14-24-50/checkpoints/epoch=54-step=6600.ckpt'
+- train=False
+- trainer.accelerator=gpu
+- decoder=ctc_greedy
