@@ -215,12 +215,23 @@ class TDSConvCTCModule(pl.LightningModule):
         T_diff = inputs.shape[0] - emissions.shape[0]
         emission_lengths = input_lengths - T_diff
 
-        loss = self.ctc_loss(
-            log_probs=emissions,  # (T, N, num_classes)
-            targets=targets.transpose(0, 1),  # (T, N) -> (N, T)
-            input_lengths=emission_lengths,  # (N,)
-            target_lengths=target_lengths,  # (N,)
-        )
+        # NOTE: As of torch 2.3, CTC loss is not implemented on MPS. We compute
+        # it on CPU (while keeping the rest of the model on MPS) so Mac users
+        # can still train/evaluate.
+        if emissions.device.type == "mps":
+            loss = self.ctc_loss(
+                log_probs=emissions.cpu(),  # (T, N, num_classes)
+                targets=targets.transpose(0, 1).cpu(),  # (T, N) -> (N, T)
+                input_lengths=emission_lengths.cpu(),  # (N,)
+                target_lengths=target_lengths.cpu(),  # (N,)
+            ).to(emissions.device)
+        else:
+            loss = self.ctc_loss(
+                log_probs=emissions,  # (T, N, num_classes)
+                targets=targets.transpose(0, 1),  # (T, N) -> (N, T)
+                input_lengths=emission_lengths,  # (N,)
+                target_lengths=target_lengths,  # (N,)
+            )
 
         # Decode emissions
         predictions = self.decoder.decode_batch(

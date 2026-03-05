@@ -7,12 +7,14 @@
 import logging
 import os
 import pprint
+import sys
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
 import hydra
 import pytorch_lightning as pl
+from hydra.core.hydra_config import HydraConfig
 from hydra.utils import get_original_cwd, instantiate
 from omegaconf import DictConfig, ListConfig, OmegaConf
 
@@ -32,7 +34,21 @@ def main(config: DictConfig):
     python_paths = os.environ.get("PYTHONPATH", "").split(os.pathsep)
     if working_dir not in python_paths:
         python_paths.append(working_dir)
-        os.environ["PYTHONPATH"] = os.pathsep.join(python_paths)
+    if working_dir not in sys.path:
+        sys.path.append(working_dir)
+
+    # Add optional local experiment folders (non-package dirs) to PYTHONPATH.
+    # This allows Hydra targets like `cnn_rnn_lightning.Foo` to resolve when
+    # the file lives under e.g. `CNN-RNN/`.
+    extra_dirs = [Path(working_dir).joinpath("CNN-RNN")]
+    for extra_dir in extra_dirs:
+        extra_dir_str = str(extra_dir)
+        if extra_dir.exists() and extra_dir_str not in python_paths:
+            python_paths.append(extra_dir_str)
+        if extra_dir.exists() and extra_dir_str not in sys.path:
+            sys.path.append(extra_dir_str)
+
+    os.environ["PYTHONPATH"] = os.pathsep.join(python_paths)
 
     # Seed for determinism. This seeds torch, numpy and python random modules
     # taking global rank into account (for multi-process distributed setting).
@@ -97,9 +113,19 @@ def main(config: DictConfig):
     )
 
     if config.train:
-        # Check if a past checkpoint exists to resume training from
-        checkpoint_dir = Path.cwd().joinpath("checkpoints")
-        resume_from_checkpoint = utils.get_last_checkpoint(checkpoint_dir)
+        # Check if a past checkpoint exists to resume training from.
+        #
+        # We key this off Hydra's output dir rather than Path.cwd() so resuming
+        # works even when Hydra is configured not to chdir into the run dir.
+        output_dir = Path(HydraConfig.get().runtime.output_dir)
+        checkpoint_dir = output_dir.joinpath("checkpoints")
+
+        resume_from_checkpoint: str | Path | None = None
+        last_checkpoint = checkpoint_dir.joinpath("last.ckpt")
+        if last_checkpoint.exists():
+            resume_from_checkpoint = last_checkpoint
+        else:
+            resume_from_checkpoint = utils.get_last_checkpoint(checkpoint_dir)
         if resume_from_checkpoint is not None:
             log.info(f"Resuming training from checkpoint {resume_from_checkpoint}")
 
