@@ -19,7 +19,7 @@ from torch import nn
 
 from emg2qwerty.charset import CharacterSet, charset
 from emg2qwerty.transforms import ToTensor, Transform
-
+import os
 
 @dataclass
 class EMGSessionData:
@@ -71,6 +71,11 @@ class EMGSessionData:
     hdf5_path: Path
 
     def __post_init__(self) -> None:
+        # if os.path.isfile(self.hdf5_path):
+        #         print("File exists")
+        # else:
+        #     print(self.hdf5_path)
+        #     raise FileNotFoundError ("issue with the file itself")
         self._file = h5py.File(self.hdf5_path, "r")
         emg2qwerty_group: h5py.Group = self._file[self.HDF5_GROUP]
 
