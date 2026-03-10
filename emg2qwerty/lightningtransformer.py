@@ -146,18 +146,16 @@ class PositionalEncoding(nn.Module):
     .. math:
         \text{PosEncoder}(pos, 2i) = sin(pos/10000^(2i/d_model))
         \text{PosEncoder}(pos, 2i+1) = cos(pos/10000^(2i/d_model))
-        \text{where pos is the word position and i is the embed idx)
+        \text{where pos is the position and i is the embed idx)
     Args:
         d_model: the embed dim (required).
-        dropout: the dropout value (default=0.1).
         max_len: the max. length of the incoming sequence (default=5000).
     Examples:
         >>> pos_encoder = PositionalEncoding(d_model)
     """
 
-    def __init__(self, d_model, dropout=0.1, max_len=5000):
+    def __init__(self, d_model, max_len=5000):
         super(PositionalEncoding, self).__init__()
-        self.dropout = nn.Dropout(p=dropout)
 
         pe = torch.zeros(max_len, d_model)
         position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
@@ -179,8 +177,7 @@ class PositionalEncoding(nn.Module):
         """
 
         x = x + self.pe[:x.size(0), :]
-        return self.dropout(x)
-
+        return x
 
 
 class TransformerModel(pl.LightningModule):
@@ -198,7 +195,7 @@ class TransformerModel(pl.LightningModule):
         optimizer: DictConfig,
         lr_scheduler: DictConfig,
         decoder: DictConfig,
-        ntoken, ninp, nhead, nhid, nlayers, dropout=0.5
+        ntoken, ninp, nhead, nhid, nlayers, dropout=0.5, has_mask = True
     ) -> None:
         super(TransformerModel, self).__init__(d_model=ninp, nhead=nhead, dim_feedforward=nhid, num_encoder_layers=nlayers)
         self.save_hyperparameters()
@@ -223,19 +220,35 @@ class TransformerModel(pl.LightningModule):
 
         # Model
         # inputs: (T, N, bands=2, electrode_channels=16, freq)
-        self.model_type = 'Transformer'
-        self.src_mask = None
-        self.pos_encoder = PositionalEncoding(ninp, dropout)
+
+        
+        self.mask = None
+
+        self.ninp = ninp
+        self.dropout = dropout
+        self.ntoken = ntoken
 
         self.input_emb = nn.Embedding(ntoken, ninp)
-        self.ninp = ninp
+        self.pos_encoder = PositionalEncoding(ninp, dropout)
+
+        self.layer = nn.TransformerEncoderLayer(batch_first=False, d_model=ninp, nhead=nhead)
+        self.encoder = nn.TransformerEncoder(self.layer, num_layers=nlayers)
+
+        self.dropout = (
+            nn.Dropout(p=dropout) if dropout > 0 else nn.Identity()
+        )
+
+        
+        num_classes = charset().num_classes
+        self.trans_classifier = nn.Linear(num_features, num_classes)
+        self.log_softmax = nn.LogSoftmax(dim=-1)
 
         # Criterion
         self.ctc_loss = nn.CTCLoss(blank=charset().null_class)
 
         # Decoder
         
-        self.decoder = nn.Linear(ninp, ntoken)
+        self.decoder = instantiate(decoder)
 
         self.init_weights()
 
@@ -263,19 +276,35 @@ class TransformerModel(pl.LightningModule):
         nn.init.zeros_(self.decoder.bias)
         nn.init.uniform_(self.decoder.weight, -initrange, initrange)
 
-    def forward(self, has_mask = True, inputs: torch.Tensor, input_lengths: torch.Tensor | None = None
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        if has_mask:
-            device = src.device
-            if self.src_mask is None or self.src_mask.size(0) != len(src):
-                mask = self._generate_square_subsequent_mask(len(src)).to(device)
-                self.src_mask = mask
-        else:
-            self.src_mask = None
+    def forward(
+        self, has_mask, inputs: torch.Tensor):
+        # inputs: (T, N, bands=2, C=16, freq)
+        # input_lengths: (N,)
+        x = self.spec_norm(inputs)
 
-        src = self.input_emb(src) * math.sqrt(self.ninp)
-        src = self.pos_encoder(src)
-        output = self.encoder(src, mask=self.src_mask)
+        # Validate expected per-band flattened feature size (16 * freq).
+        _, _, _, C, freq = x.shape
+        expected_in_features = C * freq
+        if expected_in_features != self.mlp_in_features:
+            raise ValueError(
+                "mlp_in_features mismatch: "
+                f"got {self.mlp_in_features}, but inputs imply {expected_in_features} "
+                f"(electrode_channels={C}, freq_bins={freq}). "
+                "Update `module.mlp_in_features` to match your spectrogram settings."
+            )
+
+        # (T, N, B, C, freq) -> (T, N, B, mlp_features[-1])
+        x = self.band_mlp(x)
+
+        if has_mask:
+            if self.mask is None or self.mask.size(0) != len(inputs):
+                mask = self._generate_square_subsequent_mask(len(inputs))
+                self.mask = mask
+
+
+        x= self.input_emb(x) * math.sqrt(self.ninp)
+        x = self.pos_encoder(x)
+        output = self.encoder(x, mask=mask)
         output = self.decoder(output)
         return F.log_softmax(output, dim=-1)
 
