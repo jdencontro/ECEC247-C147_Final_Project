@@ -1,0 +1,31 @@
+# @package _global_
+module:
+  _target_: CNN-RNN.cnn_rnn_lightning.CNNRNNCTCModule
+  # Per-band MLP input features: electrode_channels * freq_bins.
+  # With LogSpectrogram n_fft=64 => freq_bins = (n_fft // 2 + 1) = 33,
+  # so 16 * 33 = 528.
+  mlp_in_features: 528
+  mlp_features: [384]
+  mlp_pooling: mean
+  mlp_offsets: [-1, 0, 1]
+
+  # CNN (TDSConvEncoder) over time. block_channels must evenly divide
+  #num_features = num_bands * mlp_features[-1] #= 2 * 384 = 768.
+  tds_block_channels: [24, 24, 24, 24]
+  tds_kernel_width: 32
+  cnn_dropout: 0.1
+
+  # Optional feature projection before the RNN (reduces compute).
+  rnn_input_size: 256
+  rnn_type: lstm
+  rnn_hidden_size: 256
+  rnn_num_layers: 2
+  rnn_dropout: 0.2
+  rnn_bidirectional: True
+  rnn_output_dropout: 0.1
+  use_packed_sequence: True
+
+datamodule:
+  _target_: emg2qwerty.lightning.WindowedEMGDataModule
+  window_length: 8000  # 4 sec windows for 2kHz EMG
+  padding: [1800, 200]  # 900ms past context, 100ms future context
