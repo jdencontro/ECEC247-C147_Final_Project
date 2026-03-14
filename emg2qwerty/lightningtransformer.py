@@ -140,6 +140,8 @@ class WindowedEMGDataModule(pl.LightningDataModule):
 
 
 class PositionalEncoding(nn.Module):
+    r"""Modified from https://github.com/pytorch/examples/tree/main/word_language_model"""
+    
     r"""Inject some information about the relative or absolute position of the tokens in the sequence.
         The positional encodings have the same dimension as the embeddings, so that the two can be summed.
         Here, we use sine and cosine functions of different frequencies.
@@ -149,22 +151,16 @@ class PositionalEncoding(nn.Module):
         \text{where pos is the position and i is the embed idx)
     Args:
         d_model: the embed dim (required).
-        max_len: the max. length of the incoming sequence (default=5000).
     Examples:
         >>> pos_encoder = PositionalEncoding(d_model)
     """
 
-    def __init__(self, d_model, max_len=5000):
-        super(PositionalEncoding, self).__init__()
+    def __init__(self, d_model):
+        super().__init__()
+        self.d_model = d_model
 
-        pe = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0).transpose(0, 1)
-        self.register_buffer('pe', pe)
-
+        
+   
     def forward(self, x):
         r"""Inputs of forward function
         Args:
@@ -175,8 +171,13 @@ class PositionalEncoding(nn.Module):
         Examples:
             >>> output = pos_encoder(x)
         """
-
-        x = x + self.pe[:x.size(0), :]
+        pe = torch.zeros(int(len(x)), int(self.d_model))
+        position = torch.arange(0, int(len(x)), dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, self.d_model, 2).float() * (-math.log(10000.0) / self.d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0).transpose(0, 1).to(x.device)
+        x = x + pe[:x.size(0), :]
         return x
 
 
@@ -190,23 +191,26 @@ class TransformerModel(pl.LightningModule):
         mlp_features: Sequence[int],
         mlp_pooling: Literal["mean", "max"],
         mlp_offsets: Sequence[int],
-        block_channels: Sequence[int],
-        kernel_width: int,
         optimizer: DictConfig,
         lr_scheduler: DictConfig,
         decoder: DictConfig,
-        ntoken, ninp, nhead, nhid, nlayers, dropout=0.5, has_mask = True
+        # ntoken:int, 
+        d_model:int, 
+        nhead:int, 
+        nlayers:int,
+        dropout: float, has_mask: bool
     ) -> None:
-        super(TransformerModel, self).__init__(d_model=ninp, nhead=nhead, dim_feedforward=nhid, num_encoder_layers=nlayers)
+        super().__init__()
         self.save_hyperparameters()
-
+        
         spec_channels = self.NUM_BANDS * self.ELECTRODE_CHANNELS  # 32
         num_features = self.NUM_BANDS * mlp_features[-1]
         self.mlp_in_features = mlp_in_features
-
+        
         # Normalize each electrode channel independently over (N, freq, time).
-        self.spec_norm = SpectrogramNorm(channels=spec_channels)
 
+        self.spec_norm = SpectrogramNorm(channels=spec_channels)
+    
         # Rotation-invariant MLP feature extraction per band.
         # Per band, the MLP input is a flattened (electrodes=16, freq) tensor:
         # in_features = 16 * freq_bins = 16 * (n_fft // 2 + 1) = 528 for n_fft=64.
@@ -223,24 +227,28 @@ class TransformerModel(pl.LightningModule):
 
         
         self.mask = None
+        self.has_mask = has_mask
 
-        self.ninp = ninp
+        self.d_model = d_model
         self.dropout = dropout
-        self.ntoken = ntoken
+ 
 
-        self.input_emb = nn.Embedding(ntoken, ninp)
-        self.pos_encoder = PositionalEncoding(ninp, dropout)
 
-        self.layer = nn.TransformerEncoderLayer(batch_first=False, d_model=ninp, nhead=nhead)
+        self.flatten = nn.Flatten(start_dim=2)
+        self.input_emb = nn.Linear(num_features, d_model, bias = False)
+        self.pos_encoder = PositionalEncoding(d_model = self.d_model)
+
+       
+        self.layer = nn.TransformerEncoderLayer(batch_first=False, d_model=d_model, nhead=nhead)
         self.encoder = nn.TransformerEncoder(self.layer, num_layers=nlayers)
-
+        
         self.dropout = (
             nn.Dropout(p=dropout) if dropout > 0 else nn.Identity()
         )
 
         
         num_classes = charset().num_classes
-        self.trans_classifier = nn.Linear(num_features, num_classes)
+        self.trans_classifier = nn.Linear(d_model, num_classes)
         self.log_softmax = nn.LogSoftmax(dim=-1)
 
         # Criterion
@@ -249,12 +257,13 @@ class TransformerModel(pl.LightningModule):
         # Decoder
         
         self.decoder = instantiate(decoder)
+        
+        # self.init_weights()
+        
 
-        self.init_weights()
 
 
-
-
+        
         
 
         # Metrics
@@ -265,21 +274,22 @@ class TransformerModel(pl.LightningModule):
                 for phase in ["train", "val", "test"]
             }
         )
-
+        
 
     def _generate_square_subsequent_mask(self, sz):
         return torch.log(torch.tril(torch.ones(sz,sz)))
     
-    def init_weights(self):
-        initrange = 0.1
-        nn.init.uniform_(self.input_emb.weight, -initrange, initrange)
-        nn.init.zeros_(self.decoder.bias)
-        nn.init.uniform_(self.decoder.weight, -initrange, initrange)
+    # def init_weights(self):
+    #     initrange = 0.1
+    #     nn.init.uniform_(self.input_emb.weight, -initrange, initrange)
+    #     nn.init.zeros_(self.decoder.bias)
+    #     nn.init.uniform_(self.decoder.weight, -initrange, initrange)
 
-    def forward(
-        self, has_mask, inputs: torch.Tensor):
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         # inputs: (T, N, bands=2, C=16, freq)
         # input_lengths: (N,)
+        #x = torch.tensor(inputs).to(torch.int64)
+        
         x = self.spec_norm(inputs)
 
         # Validate expected per-band flattened feature size (16 * freq).
@@ -296,16 +306,18 @@ class TransformerModel(pl.LightningModule):
         # (T, N, B, C, freq) -> (T, N, B, mlp_features[-1])
         x = self.band_mlp(x)
 
-        if has_mask:
+        if self.has_mask:
             if self.mask is None or self.mask.size(0) != len(inputs):
                 mask = self._generate_square_subsequent_mask(len(inputs))
                 self.mask = mask
 
-
-        x= self.input_emb(x) * math.sqrt(self.ninp)
+        x = self.flatten(x)
+        x= self.input_emb(x) * math.sqrt(self.d_model)
         x = self.pos_encoder(x)
-        output = self.encoder(x, mask=mask)
-        output = self.decoder(output)
+        
+        output = self.encoder(x, mask=self.mask)
+        output = self.dropout(output)
+        output = self.trans_classifier(output)
         return F.log_softmax(output, dim=-1)
 
 
@@ -383,3 +395,15 @@ class TransformerModel(pl.LightningModule):
             optimizer_config=self.hparams.optimizer,
             lr_scheduler_config=self.hparams.lr_scheduler,
         )
+
+    
+
+   
+        
+        
+        
+    
+     
+      
+      
+       
