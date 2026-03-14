@@ -1,0 +1,23 @@
+# @package _global_
+module:
+  _target_: emg2qwerty.lightningtransformer.TransformerModel
+
+  # Per-band MLP input features: electrode_channels * freq_bins.
+  # With LogSpectrogram n_fft=64 => freq_bins = (n_fft // 2 + 1) = 33,
+  # so 16 * 33 = 528.
+  mlp_in_features: 528
+  mlp_features: [384]
+  mlp_pooling: mean
+  mlp_offsets: [-1, 0, 1] 
+  
+  nhead: 16
+  d_model: 128
+  nlayers: 4
+  dropout: 0.3
+  has_mask: True
+
+datamodule:
+  _target_: emg2qwerty.lightning.WindowedEMGDataModule
+  window_length: 8000  # 4 sec windows for 2kHz EMG
+  padding: [1800, 200]  # 900ms past context, 100ms future context
+
